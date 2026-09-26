@@ -5,6 +5,8 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from schemas import PostResponse,PostCreate
+
 
 app=FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -49,19 +51,31 @@ def get_post_page(request: Request, post_id: int):
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
 
 
-@app.get("/api/posts")
+@app.get("/api/posts", response_model=list[PostResponse], include_in_schema=True)
 def get_posts():
     return posts    
 
 
 # `post_id` is a path parameter, and the `int` annotation type-casts it from the URL string.
-@app.get("/api/posts/{post_id}")
+@app.get("/api/posts/{post_id}", response_model=PostResponse, include_in_schema=True)
 def get_post(post_id: int):
     for post in posts:
         if post["id"]==post_id:
             return post
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
 
+
+ #creating a Post reponse to create a new Post
+@app.post("/api/createposts", response_model=PostResponse, include_in_schema=True,status_code=status.HTTP_201_CREATED)
+def create_post(post: PostCreate):    
+    new_post = post.dict()
+    new_post["id"] = len(posts) + 1
+    new_post["date_posted"] = "April 22, 2025"  # You can set the current date here 
+    new_post["title"] = post.title
+    new_post["content"] = post.content
+    new_post["author"] = post.author
+    posts.append(new_post)
+    return new_post
 
 @app.exception_handler(StarletteHTTPException)
 def general_http_exception_handler(request: Request, exception: StarletteHTTPException):
@@ -107,3 +121,5 @@ def validation_exception_handler(request: Request, exception: RequestValidationE
         },
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
     )
+
+   
