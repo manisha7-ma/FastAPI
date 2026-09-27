@@ -1,17 +1,35 @@
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field,EmailStr
+from datetime import datetime
+
+class UserBase(BaseModel):
+    username: str = Field(..., min_length=1, max_length=50, description="The username of the user")
+    email: EmailStr = Field(..., description="The email address of the user")
+  
+
+class UserCreate(UserBase):
+    pass
+
+class UserResponse(UserBase):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    image_file: str | None
+    image_path:str
 
 
 class PostBase(BaseModel):
     title: str = Field(..., min_length=1, max_length=100, description="The title of the post")
     content: str = Field(..., min_length=1, description="The content of the post")
-    author: str = Field(..., min_length=1, max_length=50, description="The author of the post")
-
+    
 
 class PostCreate(PostBase):
-    pass
+    user_id:int #Temporary field to associate the post with a user; in a real application, this would be derived from the authenticated user.
 
 
 class PostResponse(PostBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
-    date_posted: str = Field(..., description="The creation timestamp of the post")
+    user_id: int  # The ID of the user who created the post; author contains the full nested user object.
+    date_posted: datetime
+    author: UserResponse  # Full nested user object for the user who created the post.
+
+    
