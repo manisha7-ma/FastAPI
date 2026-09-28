@@ -2,7 +2,7 @@
 #`DeclarativeBase` is the base class for defining ORM model classes,
 # while `sessionmaker` creates database sessions used to query and modify data.
 from sqlalchemy import create_engine
-from sqlalchemny.orm import DeclarativeBase, sessionmaker
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///./blog.db"  # SQLite database URL
 
