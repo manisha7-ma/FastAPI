@@ -170,15 +170,21 @@ def get_posts_by_user(user_id:int,db:Session=Depends(get_db)):
 
 
 
+#Creating in the Jinja2 template to display the posts and users in the HTML page with the help of the database.
+@app.get("/", include_in_schema=False)
+def home(request: Request, db: Session = Depends(get_db)):
+    posts = db.execute(select(models.Post)).scalars().all()
+    return templates.TemplateResponse(request, "home.html", {"posts": posts, "title": "Home Page"})
 
 
 
-
-
-
-
-
-
+# API for it to return per Post 
+@app.get("/posts/{post_id}",include_in_schema=False)
+def get_post_page(request:Request,post_id:int,db:Session=Depends(get_db)):
+    post=db.execute(select(models.Post).where(models.Post.id==post_id)).scalars().first()
+    if not post:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
+    return templates.TemplateResponse(request, "post.html", {"post": post, "title": post.title})
 
 
 
