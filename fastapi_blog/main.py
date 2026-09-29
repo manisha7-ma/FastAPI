@@ -106,6 +106,12 @@ templates=Jinja2Templates(directory="templates")
 #API endpoint to create a new user and store it in the database.
 @app.post("/api/users", response_model=UserResponse, include_in_schema=True,status_code=status.HTTP_201_CREATED)
 def create_user(user: UserCreate, db: Session = Depends(get_db)):
+    if_user_exists = db.execute(select(models.User).where(models.User.username == user.username)).scalars().first()
+    if if_user_exists:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User with this username already exists")
+    if_email_exists = db.execute(select(models.User).where(models.User.email == user.email)).scalars().first()
+    if if_email_exists:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User with this email already exists") 
     new_user = models.User(**user.dict())
     db.add(new_user)
     db.commit()
@@ -141,6 +147,12 @@ def get_posts(db:Session=Depends(get_db)):
 #Creating an API endpoint to create a new post and store it in the database.
 @app.post("/api/posts",response_model=PostResponse,include_in_schema=True,status_code=status.HTTP_201_CREATED   )
 def create_posts(post:PostCreate,db:Session=Depends(get_db)):
+    if_user_exists=db.execute(select(models.User).where(models.User.id==post.user_id)).scalars().first()
+    if not if_user_exists:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    if_post_exists=db.execute(select(models.Post).where(models.Post.title==post.title)).scalars().first()
+    if if_post_exists:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Post with this title already exists")
     new_post=models.Post(**post.dict())
     db.add(new_post)
     db.commit()
@@ -232,5 +244,7 @@ def validation_exception_handler(request: Request, exception: RequestValidationE
         },
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
     )
+
+
 
    
