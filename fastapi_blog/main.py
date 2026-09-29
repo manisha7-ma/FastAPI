@@ -5,7 +5,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from schemas import PostResponse,PostCreate,UserCreate, UserResponse
+from schemas import PostResponse,PostCreate,UserCreate, UserResponse,PostUpdate
 
 from  typing import Annotated
 from sqlalchemy import select 
@@ -159,12 +159,38 @@ def create_posts(post:PostCreate,db:Session=Depends(get_db)):
     db.refresh(new_post)
     return new_post
 
+
+
 #Creating an API endpoint to retrieve a specific post by ID from the database.
 @app.get("/api/posts/{post_id}",response_model=PostResponse,include_in_schema=True)
 def get_post(post_id:int,db:Session=Depends(get_db)):
     post=db.execute(select(models.Post).where(models.Post.id==post_id)).scalars().first()
     if not post:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
+    return post
+
+#The Patch method is used to update a post in the database. 
+#It takes the post ID and the updated post data as input, 
+#and updates the corresponding post in the database.
+# If the post is not found, it raises a 404 error. After updating, it commits the changes to the database and returns the updated post.
+
+
+@app.patch("/api/posts/{post_id}", response_model=PostResponse, include_in_schema=True)
+#sending PostUpdate schema to update the post in the database. Cause the PostUpdate schema has optional fields,
+#it allows for partial updates of the post.
+def update_post(post_id: int, post_update: PostUpdate, db: Session = Depends(get_db)):
+    post = db.execute(select(models.Post).where(models.Post.id == post_id)).scalars().first()
+    if not post:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
+
+    # Update the post with the new values 
+    # the Exclude_unset=True option ensures that only the fields that are provided in the request will be updated,
+    # leaving the other fields unchanged.
+    for key, value in post_update.dict(exclude_unset=True).items():
+        setattr(post, key, value)
+
+    db.commit()
+    db.refresh(post)
     return post
 
 #API to get Post Created by user_id 

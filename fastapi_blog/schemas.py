@@ -16,6 +16,8 @@ class UserResponse(UserBase):
     image_path:str
 
 
+
+
 class PostBase(BaseModel):
     title: str = Field(..., min_length=1, max_length=100, description="The title of the post")
     content: str = Field(..., min_length=1, description="The content of the post")
@@ -23,6 +25,10 @@ class PostBase(BaseModel):
 
 class PostCreate(PostBase):
     user_id:int #Temporary field to associate the post with a user; in a real application, this would be derived from the authenticated user.
+
+class PostUpdate(PostBase):
+    title: str | None = Field(default=None, min_length=1, max_length=100)
+    content: str | None = Field(default=None, min_length=1)
 
 
 class PostResponse(PostBase):
