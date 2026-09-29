@@ -193,6 +193,20 @@ def update_post(post_id: int, post_update: PostUpdate, db: Session = Depends(get
     db.refresh(post)
     return post
 
+@app.put("/api/posts/{post_id}",response_model=PostResponse, include_in_schema=True)
+def replace_post(post_id:int,post_update:PostCreate,db:Session=Depends(get_db)):
+    post=db.execute(select(models.Post).where(models.Post.id==post_id)).scalars().first()
+    if not post:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
+    user=db.execute(select(models.User).where(models.User.id==post_update.user_id)).scalars().first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    for key, value in post_update.dict().items():
+        setattr(post, key, value)
+    db.commit()
+    db.refresh(post)
+    return post
+
 #API to get Post Created by user_id 
 @app.get("/api/users/{user_id}/posts",response_model=list[PostResponse],include_in_schema=True)
 def get_posts_by_user(user_id:int,db:Session=Depends(get_db)):
