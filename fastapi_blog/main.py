@@ -207,6 +207,16 @@ def replace_post(post_id:int,post_update:PostCreate,db:Session=Depends(get_db)):
     db.refresh(post)
     return post
 
+#Delete API endpoint to delete a post by ID from the database.
+@app.delete("/api/posts/{post_id}",status_code=status.HTTP_204_NO_CONTENT,include_in_schema=True)
+def delete_post(post_id:int,db:Session=Depends(get_db)):
+    post=db.execute(select(models.Post).where(models.Post.id==post_id)).scalars().first()
+    if not post:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
+    db.delete(post)
+    db.commit()
+    return {"detail": "Post deleted successfully"}    
+
 #API to get Post Created by user_id 
 @app.get("/api/users/{user_id}/posts",response_model=list[PostResponse],include_in_schema=True)
 def get_posts_by_user(user_id:int,db:Session=Depends(get_db)):
