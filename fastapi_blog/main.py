@@ -5,7 +5,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from schemas import PostResponse,PostCreate,UserCreate, UserResponse,PostUpdate
+from schemas import PostResponse,PostCreate,UserCreate, UserResponse,PostUpdate,UserUpdate
 
 from  typing import Annotated
 from sqlalchemy import select 
@@ -135,6 +135,46 @@ def get_user(user_id:int,db:Session=Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     return user
 
+#API endpoint to update a specific user by ID from the database. It takes the user ID and the updated user data as input, and updates the corresponding user in the database. If the user is not found, it raises a 404 error. After updating, it commits the changes to the database and returns the updated user.
+@app.patch("/api/users/{user_id}",response_model=UserResponse,include_in_schema=True)
+def update_user(user_id:int,user_update:UserUpdate,db:Session=Depends(get_db)):
+    user=db.execute(select(models.User).where(models.User.id==user_id)).scalars().first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    for key, value in user_update.dict(exclude_unset=True).items():
+        setattr(user, key, value)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+
+#API endpoint to replace a specific user by ID from the database. It takes the user ID and the updated user data as input, and replaces the corresponding user in the database. If the user is not found, it raises a 404 error. After replacing, it commits the changes to the database and returns the updated user.
+@app.put("/api/users/{user_id}",response_model=UserResponse,include_in_schema=True)
+def replace_user(user_id:int,user_update:UserCreate,db:Session=Depends(get_db)):
+    user=db.execute(select(models.User).where(models.User.id==user_id)).scalars().first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    for key, value in user_update.dict().items():
+        setattr(user, key, value)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+
+#API endpoint to delete a specific user by ID from the database.
+@app.delete("/api/users/{user_id}",status_code=status.HTTP_204_NO_CONTENT,include_in_schema=True)
+def delete_user(user_id:int,db:Session=Depends(get_db)):
+    user=db.execute(select(models.User).where(models.User.id==user_id)).scalars().first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    posts_by_user=db.execute(select(models.Post).where(models.Post.user_id==user_id)).scalars().all()
+    if posts_by_user:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete user with existing posts")
+    db.delete(user)
+    db.commit()
+    return {"detail": "User deleted successfully"}   
 
 #Creating API endpoints to create and retrieve posts from the database.
 @app.get("/api/getposts",response_model=list[PostResponse],include_in_schema=True)

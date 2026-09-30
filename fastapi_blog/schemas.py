@@ -15,6 +15,12 @@ class UserResponse(UserBase):
     image_file: str | None
     image_path:str
 
+class UserUpdate(UserBase):
+    username: str | None = Field(default=None, min_length=1, max_length=50)
+    email: EmailStr | None = Field(default=None)
+    image_file: str | None = Field(default=None)
+    image_path:str | None = Field(default=None)
+
 
 
 
