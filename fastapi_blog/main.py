@@ -141,7 +141,28 @@ def update_user(user_id:int,user_update:UserUpdate,db:Session=Depends(get_db)):
     user=db.execute(select(models.User).where(models.User.id==user_id)).scalars().first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    for key, value in user_update.dict(exclude_unset=True).items():
+
+    updated_fields = user_update.dict(exclude_unset=True)
+    if "username" in updated_fields:
+        username_exists = db.execute(
+            select(models.User).where(
+                models.User.username == updated_fields["username"],
+                models.User.id != user_id,
+            )
+        ).scalars().first()
+        if username_exists:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User with this username already exists")
+    if "email" in updated_fields:
+        email_exists = db.execute(
+            select(models.User).where(
+                models.User.email == updated_fields["email"],
+                models.User.id != user_id,
+            )
+        ).scalars().first()
+        if email_exists:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User with this email already exists")
+
+    for key, value in updated_fields.items():
         setattr(user, key, value)
     db.commit()
     db.refresh(user)
@@ -155,11 +176,33 @@ def replace_user(user_id:int,user_update:UserCreate,db:Session=Depends(get_db)):
     user=db.execute(select(models.User).where(models.User.id==user_id)).scalars().first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    for key, value in user_update.dict().items():
+    
+    updated_fields = user_update.dict(exclude_unset=True)
+    if "username" in updated_fields:
+        username_exists = db.execute(
+            select(models.User).where(
+                models.User.username == updated_fields["username"],
+                models.User.id != user_id,
+            )
+        ).scalars().first()
+        if username_exists:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User with this username already exists")
+    if "email" in updated_fields:
+        email_exists = db.execute(
+            select(models.User).where(
+                models.User.email == updated_fields["email"],
+                models.User.id != user_id,
+            )
+        ).scalars().first()
+        if email_exists:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User with this email already exists")
+
+    for key, value in updated_fields.items():
         setattr(user, key, value)
     db.commit()
     db.refresh(user)
     return user
+
 
 
 
