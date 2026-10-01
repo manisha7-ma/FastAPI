@@ -213,11 +213,11 @@ def delete_user(user_id:int,db:Session=Depends(get_db)):
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     posts_by_user=db.execute(select(models.Post).where(models.Post.user_id==user_id)).scalars().all()
-    if posts_by_user:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete user with existing posts")
     db.delete(user)
     db.commit()
     return {"detail": "User deleted successfully"}   
+
+
 
 #Creating API endpoints to create and retrieve posts from the database.
 @app.get("/api/getposts",response_model=list[PostResponse],include_in_schema=True)
