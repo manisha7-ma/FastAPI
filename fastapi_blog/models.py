@@ -12,7 +12,10 @@ class User(Base):
     email:Mapped[str]=mapped_column(String(100),unique=True,nullable=False)
     image_file:Mapped[str|None]=mapped_column(String(200),nullable=True,default=None)
 
-    posts:Mapped[list["Post"]]=relationship("Post",back_populates="author")
+    posts:Mapped[list["Post"]]=relationship("Post",back_populates="author",cascade="all, delete-orphan")
+     #cascade="all, delete-orphan": The cascade option in SQLAlchemy defines how operations on a
+    # parent object affect its related child objects. In this case, "all, delete-orphan" means that when a User is deleted, all their associated Post objects will also be deleted (cascade delete), and if a Post is removed from the User's posts collection, 
+    #it will be deleted from the database as well (delete-orphan).
 
     @property
     def image_path(self)->str:
@@ -28,7 +31,5 @@ class Post(Base):
     content:Mapped[str]=mapped_column(Text,nullable=False)
     user_id:Mapped[int]=mapped_column(Integer,ForeignKey("users.id"),nullable=False)
     date_posted:Mapped[datetime]=mapped_column(DateTime(timezone=True),default=lambda:datetime.now(UTC),nullable=False)
-    author:Mapped["User"]=relationship("User",back_populates="posts",cascade="all, delete-orphan")
-    #cascade="all, delete-orphan": The cascade option in SQLAlchemy defines how operations on a
-    # parent object affect its related child objects. In this case, "all, delete-orphan" means that when a User is deleted, all their associated Post objects will also be deleted (cascade delete), and if a Post is removed from the User's posts collection, 
-    #it will be deleted from the database as well (delete-orphan).
+    author:Mapped["User"]=relationship("User",back_populates="posts")
+   
