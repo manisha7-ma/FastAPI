@@ -1,6 +1,10 @@
 # `create_engine` creates the connection interface between SQLAlchemy and the  database. 
 #`DeclarativeBase` is the base class for defining ORM model classes,
 # while `sessionmaker` creates database sessions used to query and modify data.
+
+
+
+#Making it for Asynchronous Engine to use with FastAPI, but for SQLite, we will use the synchronous engine. 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
