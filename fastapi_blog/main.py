@@ -13,26 +13,49 @@ from sqlalchemy.orm import Session
 from database import get_db,Base,engine
 import models
 
-#Aync Pacage for Asynchronous programming in Python, allowing for concurrent execution of tasks.
+#Async Pacage for Asynchronous programming in Python, allowing for concurrent execution of tasks.
+#for the lifespan event handler to create the database tables when the application starts up.
 from contextlib import asynccontextmanager
-from fastapi.exceptions_handlers import request_validation_exception_handler, http_exception_handler
+
+from fastapi.exception_handlers import request_validation_exception_handler, http_exception_handler
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import selectinload
+#selectinload is a loading strategy in SQLAlchemy that allows for efficient retrieval
+#of related objects in a single query, reducing the number of database round-trips and improving
+#performance when accessing related data.
 
 
-app=FastAPI()
 
-#creatting Database Table 
-Base.metadata.create_all(bind=engine)
+
+#creating Database Table 
+#Base.metadata.create_all(bind=engine)
 # looks into all of the model and creates the tables in the database if they don't exist already.
 #it is idempotent, meaning that it can be called multiple times without causing any issues or duplicating tables.
+
+#lifespan event handler to create the database tables when the application starts up.
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    #Startup
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield
+    #Shutdown 
+    await engine.dispose()
+ 
+app=FastAPI(lifespan=lifespan)
+    
+
+
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.mount("/media", StaticFiles(directory="media"), name="media")
 
 
 templates=Jinja2Templates(directory="templates")
 
-
+#Lazy loading is not allowed in asynchronous context, so we need to use selectinload to load the related objects in a single query.
+#For example getting author of the post, we can use selectinload to load the author of the post in a single query instead of making multiple queries to the database.
 
 
 
@@ -112,149 +135,166 @@ templates=Jinja2Templates(directory="templates")
 # Creating API endpoints that are using the Database to store and retrieve the data instead of using static data.
 #API endpoint to create a new user and store it in the database.
 @app.post("/api/users", response_model=UserResponse, include_in_schema=True,status_code=status.HTTP_201_CREATED)
-def create_user(user: UserCreate, db: Session = Depends(get_db)):
-    if_user_exists = db.execute(select(models.User).where(models.User.username == user.username)).scalars().first()
-    if if_user_exists:
+async def create_user(user: UserCreate, db: Annotated[AsyncSession, Depends(get_db)]):
+    result = await db.execute(select(models.User).where(models.User.username == user.username))
+    if result.scalars().first():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User with this username already exists")
-    if_email_exists = db.execute(select(models.User).where(models.User.email == user.email)).scalars().first()
-    if if_email_exists:
+    result = await db.execute(select(models.User).where(models.User.email == user.email))
+    if result.scalars().first():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User with this email already exists") 
-    new_user = models.User(**user.dict())
+    new_user = models.User(**user.model_dump())
     db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
+    await db.commit()
+    await db.refresh(new_user)
     return new_user
 
 #API endpoint to retrieve all users from the database.
 @app.get("/api/getusers", response_model=list[UserCreate], include_in_schema=True)
-def get_users(db:Session=Depends(get_db)):
-    userlist=db.execute(select(models.User)).scalars().all()
-
+async def get_users(db: Annotated[AsyncSession, Depends(get_db)]):
+    result = await db.execute(select(models.User))
+    userlist = result.scalars().all()
     if not userlist:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No users found")
     return userlist
 
 #API endpoint to retrieve a specific user by ID from the database.
 @app.get("/api/users/{user_id}",response_model=UserCreate,include_in_schema=True)
-def get_user(user_id:int,db:Session=Depends(get_db)):
-    user=db.execute(select (models.User).where (models.User.id==user_id)).scalars().first()
+async def get_user(user_id:int,db:Annotated[AsyncSession, Depends(get_db)]):
+    result = await db.execute(select(models.User).where(models.User.id==user_id))
+    user = result.scalars().first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     return user
 
 #API endpoint to update a specific user by ID from the database. It takes the user ID and the updated user data as input, and updates the corresponding user in the database. If the user is not found, it raises a 404 error. After updating, it commits the changes to the database and returns the updated user.
 @app.patch("/api/users/{user_id}",response_model=UserResponse,include_in_schema=True)
-def update_user(user_id:int,user_update:UserUpdate,db:Session=Depends(get_db)):
-    user=db.execute(select(models.User).where(models.User.id==user_id)).scalars().first()
+async def update_user(user_id:int,user_update:UserUpdate,db:Annotated[AsyncSession, Depends(get_db)]):
+    result = await db.execute(select(models.User).where(models.User.id==user_id))
+    user = result.scalars().first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-
-    updated_fields = user_update.dict(exclude_unset=True)
+   
+    updated_fields = user_update.model_dump(exclude_unset=True)
     if "username" in updated_fields:
-        username_exists = db.execute(
+        username_result = await db.execute(
             select(models.User).where(
                 models.User.username == updated_fields["username"],
                 models.User.id != user_id,
             )
-        ).scalars().first()
+        )
+        username_exists = username_result.scalars().first()
         if username_exists:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User with this username already exists")
     if "email" in updated_fields:
-        email_exists = db.execute(
+        email_result = await db.execute(
             select(models.User).where(
                 models.User.email == updated_fields["email"],
                 models.User.id != user_id,
             )
-        ).scalars().first()
+        )
+        email_exists = email_result.scalars().first()
         if email_exists:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User with this email already exists")
 
     for key, value in updated_fields.items():
         setattr(user, key, value)
-    db.commit()
-    db.refresh(user)
+    await db.commit()
+    await db.refresh(user)
     return user
 
 
 
 #API endpoint to replace a specific user by ID from the database. It takes the user ID and the updated user data as input, and replaces the corresponding user in the database. If the user is not found, it raises a 404 error. After replacing, it commits the changes to the database and returns the updated user.
 @app.put("/api/users/{user_id}",response_model=UserResponse,include_in_schema=True)
-def replace_user(user_id:int,user_update:UserCreate,db:Session=Depends(get_db)):
-    user=db.execute(select(models.User).where(models.User.id==user_id)).scalars().first()
+async def replace_user(user_id:int,user_update:UserCreate,db:Annotated[AsyncSession, Depends(get_db)]):
+    result = await db.execute(select(models.User).where(models.User.id==user_id))
+    user = result.scalars().first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     
-    updated_fields = user_update.dict(exclude_unset=True)
+    updated_fields = user_update.model_dump(exclude_unset=True)
     if "username" in updated_fields:
-        username_exists = db.execute(
+        result = await db.execute(
             select(models.User).where(
                 models.User.username == updated_fields["username"],
                 models.User.id != user_id,
             )
-        ).scalars().first()
+        )
+        username_exists = result.scalars().first() 
+            
         if username_exists:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User with this username already exists")
     if "email" in updated_fields:
-        email_exists = db.execute(
+        result = await db.execute(
             select(models.User).where(
                 models.User.email == updated_fields["email"],
                 models.User.id != user_id,
             )
-        ).scalars().first()
+        )
+        email_exists = result.scalars().first()
         if email_exists:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User with this email already exists")
 
     for key, value in updated_fields.items():
         setattr(user, key, value)
-    db.commit()
-    db.refresh(user)
+    await db.commit()
+    await db.refresh(user)
     return user
-
-
 
 
 #API endpoint to delete a specific user by ID from the database.
 @app.delete("/api/users/{user_id}",status_code=status.HTTP_204_NO_CONTENT,include_in_schema=True)
-def delete_user(user_id:int,db:Session=Depends(get_db)):
-    user=db.execute(select(models.User).where(models.User.id==user_id)).scalars().first()
+async def delete_user(user_id:int,db:Annotated[AsyncSession, Depends(get_db)]):
+    result = await db.execute(select(models.User).where(models.User.id==user_id))
+    user = result.scalars().first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    posts_by_user=db.execute(select(models.Post).where(models.Post.user_id==user_id)).scalars().all()
-    db.delete(user)
-    db.commit()
+    result = await db.execute(select(models.Post).where(models.Post.user_id==user_id))
+    posts_by_user = result.scalars().all()
+    if posts_by_user:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete user with existing posts")
+    await db.delete(user)
+    await db.commit()
     return {"detail": "User deleted successfully"}   
 
 
 
 #Creating API endpoints to create and retrieve posts from the database.
 @app.get("/api/getposts",response_model=list[PostResponse],include_in_schema=True)
-def get_posts(db:Session=Depends(get_db)):
-    postList=db.execute(select(models.Post)).scalars().all()
+async def get_posts(db: Annotated[AsyncSession, Depends(get_db)]):
+    result = await db.execute(select(models.Post).options(selectinload(models.Post.author)))    
+    postList = result.scalars().all()
     if not postList:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No posts found")
     return postList
 
 #Creating an API endpoint to create a new post and store it in the database.
 @app.post("/api/posts",response_model=PostResponse,include_in_schema=True,status_code=status.HTTP_201_CREATED   )
-def create_posts(post:PostCreate,db:Session=Depends(get_db)):
-    if_user_exists=db.execute(select(models.User).where(models.User.id==post.user_id)).scalars().first()
-    if not if_user_exists:
+async def create_posts(post:PostCreate,db:Annotated[AsyncSession, Depends(get_db)]):
+    user_result = await db.execute(select(models.User).where(models.User.id==post.user_id))
+    user = user_result.scalars().first()
+    if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    if_post_exists=db.execute(select(models.Post).where(models.Post.title==post.title)).scalars().first()
-    if if_post_exists:
+    post_result = await db.execute(select(models.Post).where(models.Post.title==post.title))
+    if post_result.scalars().first():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Post with this title already exists")
-    new_post=models.Post(**post.dict())
+    new_post=models.Post(**post.model_dump())
     db.add(new_post)
-    db.commit()
-    db.refresh(new_post)
-    return new_post
+    await db.commit()
+    result = await db.execute(
+        select(models.Post)
+        .where(models.Post.id == new_post.id)
+        .options(selectinload(models.Post.author))
+    )
+    return result.scalars().one()
 
 
 
 #Creating an API endpoint to retrieve a specific post by ID from the database.
 @app.get("/api/posts/{post_id}",response_model=PostResponse,include_in_schema=True)
-def get_post(post_id:int,db:Session=Depends(get_db)):
-    post=db.execute(select(models.Post).where(models.Post.id==post_id)).scalars().first()
+async def get_post(post_id:int,db:Annotated[AsyncSession, Depends(get_db)]):
+    result = await db.execute(select(models.Post).where(models.Post.id==post_id).options(selectinload(models.Post.author)))
+    post = result.scalars().first()
     if not post:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
     return post
@@ -268,52 +308,82 @@ def get_post(post_id:int,db:Session=Depends(get_db)):
 @app.patch("/api/posts/{post_id}", response_model=PostResponse, include_in_schema=True)
 #sending PostUpdate schema to update the post in the database. Cause the PostUpdate schema has optional fields,
 #it allows for partial updates of the post.
-def update_post(post_id: int, post_update: PostUpdate, db: Session = Depends(get_db)):
-    post = db.execute(select(models.Post).where(models.Post.id == post_id)).scalars().first()
+async def update_post(post_id: int, post_update: PostUpdate, db: Annotated[AsyncSession, Depends(get_db)]):
+    result = await db.execute(
+        select(models.Post)
+        .where(models.Post.id == post_id)
+        .options(selectinload(models.Post.author))
+    )
+    post = result.scalars().first()
     if not post:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
 
     # Update the post with the new values 
     # the Exclude_unset=True option ensures that only the fields that are provided in the request will be updated,
     # leaving the other fields unchanged.
-    for key, value in post_update.dict(exclude_unset=True).items():
+    for key, value in post_update.model_dump(exclude_unset=True).items():
         setattr(post, key, value)
 
-    db.commit()
-    db.refresh(post)
-    return post
+    await db.commit()
+    result = await db.execute(
+        select(models.Post)
+        .where(models.Post.id == post_id)
+        .options(selectinload(models.Post.author))
+    )
+    return result.scalars().one()
 
 @app.put("/api/posts/{post_id}",response_model=PostResponse, include_in_schema=True)
-def replace_post(post_id:int,post_update:PostCreate,db:Session=Depends(get_db)):
-    post=db.execute(select(models.Post).where(models.Post.id==post_id)).scalars().first()
+async def replace_post(post_id:int,post_update:PostCreate,db:Annotated[AsyncSession, Depends(get_db)]):
+    result = await db.execute(select(models.Post).where(models.Post.id==post_id).options(selectinload(models.Post.author)))
+    post = result.scalars().first()
     if not post:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
-    user=db.execute(select(models.User).where(models.User.id==post_update.user_id)).scalars().first()
+    user_result = await db.execute(select(models.User).where(models.User.id == post_update.user_id))
+    user = user_result.scalars().first()
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    for key, value in post_update.dict().items():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User with ID {post_update.user_id} not found; create that user before assigning the post",
+        )
+    result = await db.execute(select(models.Post).options(selectinload(models.Post.author)).where(models.Post.title==post_update.title,models.Post.id!=post_id))
+    duplicate_post = result.scalars().first()
+    if duplicate_post:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A post with this title already exists")
+    for key, value in post_update.model_dump().items():
         setattr(post, key, value)
-    db.commit()
-    db.refresh(post)
-    return post
+    await db.commit()
+    result = await db.execute(
+        select(models.Post)
+        .where(models.Post.id == post_id)
+        .options(selectinload(models.Post.author))
+    )
+    return result.scalars().one()
 
 #Delete API endpoint to delete a post by ID from the database.
 @app.delete("/api/posts/{post_id}",status_code=status.HTTP_204_NO_CONTENT,include_in_schema=True)
-def delete_post(post_id:int,db:Session=Depends(get_db)):
-    post=db.execute(select(models.Post).where(models.Post.id==post_id)).scalars().first()
+async def delete_post(post_id:int,db:Annotated[AsyncSession, Depends(get_db)]):
+    result = await db.execute(select(models.Post).where(models.Post.id==post_id).options(selectinload(models.Post.author)))
+    post = result.scalars().first()
     if not post:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
-    db.delete(post)
-    db.commit()
+    await db.delete(post)
+    await db.commit()
     return {"detail": "Post deleted successfully"}    
 
 #API to get Post Created by user_id 
 @app.get("/api/users/{user_id}/posts",response_model=list[PostResponse],include_in_schema=True)
-def get_posts_by_user(user_id:int,db:Session=Depends(get_db)):
-    user=db.execute(select(models.User).where(models.User.id==user_id)).scalars().first()
+async def get_posts_by_user(user_id:int,db:Annotated[AsyncSession, Depends(get_db)]):
+    result = await db.execute(
+        select(models.User)
+        .where(models.User.id == user_id)
+        .options(
+            selectinload(models.User.posts).selectinload(models.Post.author)
+        )
+    )
+    user = result.scalars().first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    posts_by_user=user.posts
+    posts_by_user = user.posts
     if not posts_by_user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No posts found for this user")
     return posts_by_user
@@ -323,21 +393,27 @@ def get_posts_by_user(user_id:int,db:Session=Depends(get_db)):
 
 
 #Creating in the Jinja2 template to display the posts and users in the HTML page with the help of the database.
-@app.get("/", include_in_schema=False)
-def home(request: Request, db: Session = Depends(get_db)):
-    posts = db.execute(select(models.Post)).scalars().all()
+@app.get("/", include_in_schema=False,name="home")
+async def home(request: Request, db: Annotated[AsyncSession, Depends(get_db)]):
+    result = await db.execute(
+        select(models.Post).options(selectinload(models.Post.author))
+    )
+    posts = result.scalars().all()
     return templates.TemplateResponse(request, "home.html", {"posts": posts, "title": "Home Page"})
 
 
 
 # API for it to return per Post 
 @app.get("/posts/{post_id}",include_in_schema=False)
-def get_post_page(request:Request,post_id:int,db:Session=Depends(get_db)):
-    post=db.execute(select(models.Post).where(models.Post.id==post_id)).scalars().first()
+async def get_post_page(request:Request,post_id:int,db:Annotated[AsyncSession, Depends(get_db)]):
+    result = await db.execute(
+        select(models.Post).where(models.Post.id == post_id).options(selectinload(models.Post.author))
+    )
+    post = result.scalars().first()
     if not post:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
-    return templates.TemplateResponse(request, "post.html", {"post": post, "title": post.title})
-
+    return templates.TemplateResponse(request, "post.html", {"post": post, "title": post.title})        
+   
 
 
 @app.exception_handler(StarletteHTTPException)

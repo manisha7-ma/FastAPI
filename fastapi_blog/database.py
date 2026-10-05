@@ -17,7 +17,7 @@
 
 
 #The below imports are used for asynchronous database operations in FastAPI, allowing for better performance and scalability in handling concurrent requests.
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession,aync_sessionmaker
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession,async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 
 
@@ -26,7 +26,7 @@ SQLALCHEMY_DATABASE_URL = "sqlite+aiosqlite:///./blog.db"  # SQLite database URL
 engine= create_async_engine(
     SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
 # Creates the SQLAlchemy connection interface for the SQLite database.
-AsyncSessionLocal = aync_sessionmaker(
+AsyncSessionLocal = async_sessionmaker(
     #autocommit=False, autoflush=False, bind=engine)
     engine,class_=AsyncSession, expire_on_commit=False
 )
