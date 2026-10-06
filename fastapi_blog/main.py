@@ -286,6 +286,8 @@ async def create_posts(post:PostCreate,db:Annotated[AsyncSession, Depends(get_db
         .where(models.Post.id == new_post.id)
         .options(selectinload(models.Post.author))
     )
+    #we can also do  result=await (new_post,attribute_names=["author"]) to get the author of the post,
+    #but this is not recommended as it will make multiple queries to the database.
     return result.scalars().one()
 
 
@@ -417,7 +419,7 @@ async def get_post_page(request:Request,post_id:int,db:Annotated[AsyncSession, D
 
 
 @app.exception_handler(StarletteHTTPException)
-def general_http_exception_handler(request: Request, exception: StarletteHTTPException):
+async def general_http_exception_handler(request: Request, exception: StarletteHTTPException):
     message = (
         exception.detail
         if exception.detail
@@ -425,10 +427,7 @@ def general_http_exception_handler(request: Request, exception: StarletteHTTPExc
     )
 
     if request.url.path.startswith("/api"):
-        return JSONResponse(
-            status_code=exception.status_code,
-            content={"detail": message},
-        )
+        return await http_exception_handler(request, exception)
 
     return templates.TemplateResponse(
         request,
@@ -443,12 +442,9 @@ def general_http_exception_handler(request: Request, exception: StarletteHTTPExc
 
 
 @app.exception_handler(RequestValidationError)
-def validation_exception_handler(request: Request, exception: RequestValidationError):
+async def validation_exception_handler(request: Request, exception: RequestValidationError):
     if request.url.path.startswith("/api"):
-        return JSONResponse(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            content={"detail": exception.errors()},
-        )
+        return await http_exception_handler(request, exception)
 
     return templates.TemplateResponse(
         request,
