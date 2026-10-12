@@ -1,6 +1,19 @@
 
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+import models
+from database import get_db
+from schemas import PostCreate, PostResponse, PostUpdate
+
+router = APIRouter()
+
 #Creating API endpoints to create and retrieve posts from the database.
-@app.get("/api/getposts",response_model=list[PostResponse],include_in_schema=True)
+@router.get("/getposts",response_model=list[PostResponse],include_in_schema=True)
 async def get_posts(db: Annotated[AsyncSession, Depends(get_db)]):
     result = await db.execute(select(models.Post).options(selectinload(models.Post.author)))    
     postList = result.scalars().all()
@@ -9,7 +22,7 @@ async def get_posts(db: Annotated[AsyncSession, Depends(get_db)]):
     return postList
 
 #Creating an API endpoint to create a new post and store it in the database.
-@app.post("/api/posts",response_model=PostResponse,include_in_schema=True,status_code=status.HTTP_201_CREATED   )
+@router.post("",response_model=PostResponse,include_in_schema=True,status_code=status.HTTP_201_CREATED   )
 async def create_posts(post:PostCreate,db:Annotated[AsyncSession, Depends(get_db)]):
     user_result = await db.execute(select(models.User).where(models.User.id==post.user_id))
     user = user_result.scalars().first()
@@ -33,7 +46,7 @@ async def create_posts(post:PostCreate,db:Annotated[AsyncSession, Depends(get_db
 
 
 #Creating an API endpoint to retrieve a specific post by ID from the database.
-@app.get("/api/posts/{post_id}",response_model=PostResponse,include_in_schema=True)
+@router.get("/{post_id}",response_model=PostResponse,include_in_schema=True)
 async def get_post(post_id:int,db:Annotated[AsyncSession, Depends(get_db)]):
     result = await db.execute(select(models.Post).where(models.Post.id==post_id).options(selectinload(models.Post.author)))
     post = result.scalars().first()
@@ -47,7 +60,7 @@ async def get_post(post_id:int,db:Annotated[AsyncSession, Depends(get_db)]):
 # If the post is not found, it raises a 404 error. After updating, it commits the changes to the database and returns the updated post.
 
 
-@app.patch("/api/posts/{post_id}", response_model=PostResponse, include_in_schema=True)
+@router.patch("/{post_id}", response_model=PostResponse, include_in_schema=True)
 #sending PostUpdate schema to update the post in the database. Cause the PostUpdate schema has optional fields,
 #it allows for partial updates of the post.
 async def update_post(post_id: int, post_update: PostUpdate, db: Annotated[AsyncSession, Depends(get_db)]):
@@ -74,7 +87,7 @@ async def update_post(post_id: int, post_update: PostUpdate, db: Annotated[Async
     )
     return result.scalars().one()
 
-@app.put("/api/posts/{post_id}",response_model=PostResponse, include_in_schema=True)
+@router.put("/{post_id}",response_model=PostResponse, include_in_schema=True)
 async def replace_post(post_id:int,post_update:PostCreate,db:Annotated[AsyncSession, Depends(get_db)]):
     result = await db.execute(select(models.Post).where(models.Post.id==post_id).options(selectinload(models.Post.author)))
     post = result.scalars().first()
@@ -102,7 +115,7 @@ async def replace_post(post_id:int,post_update:PostCreate,db:Annotated[AsyncSess
     return result.scalars().one()
 
 #Delete API endpoint to delete a post by ID from the database.
-@app.delete("/api/posts/{post_id}",status_code=status.HTTP_204_NO_CONTENT,include_in_schema=True)
+@router.delete("/{post_id}",status_code=status.HTTP_204_NO_CONTENT,include_in_schema=True)
 async def delete_post(post_id:int,db:Annotated[AsyncSession, Depends(get_db)]):
     result = await db.execute(select(models.Post).where(models.Post.id==post_id).options(selectinload(models.Post.author)))
     post = result.scalars().first()

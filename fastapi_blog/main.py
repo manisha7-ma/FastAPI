@@ -7,7 +7,7 @@ from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from schemas import PostResponse,PostCreate,UserCreate, UserResponse,PostUpdate,UserUpdate
 
-from  typing import Annotated
+from typing import Annotated
 from sqlalchemy import select 
 from sqlalchemy.orm import Session
 from database import get_db,Base,engine
@@ -24,7 +24,8 @@ from sqlalchemy.orm import selectinload
 #of related objects in a single query, reducing the number of database round-trips and improving
 #performance when accessing related data.
 
-
+#Importing the routes from the posts and users modules to include them in the main application.
+from routes import posts,users
 
 
 #creating Database Table 
@@ -53,7 +54,9 @@ app.mount("/media", StaticFiles(directory="media"), name="media")
 
 
 templates=Jinja2Templates(directory="templates")
-
+#tags is a list of strings that can be used to group related endpoints together in the OpenAPI documentation.
+app.include_router(posts.router,prefix="/api/posts",tags=["Posts"])
+app.include_router(users.router,prefix="/api/users",tags=["Users"])
 #Lazy loading is not allowed in asynchronous context, so we need to use selectinload to load the related objects in a single query.
 #For example getting author of the post, we can use selectinload to load the author of the post in a single query instead of making multiple queries to the database.
 
@@ -128,30 +131,6 @@ templates=Jinja2Templates(directory="templates")
 #     new_post["author"] = post.author
 #     posts.append(new_post)
 #     return new_post
-
-
-
-
-
-
-#API to get Post Created by user_id 
-@app.get("/api/users/{user_id}/posts",response_model=list[PostResponse],include_in_schema=True)
-async def get_posts_by_user(user_id:int,db:Annotated[AsyncSession, Depends(get_db)]):
-    result = await db.execute(
-        select(models.User)
-        .where(models.User.id == user_id)
-        .options(
-            selectinload(models.User.posts).selectinload(models.Post.author)
-        )
-    )
-    user = result.scalars().first()
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    posts_by_user = user.posts
-    if not posts_by_user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No posts found for this user")
-    return posts_by_user
-
 
 
 
