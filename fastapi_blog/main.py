@@ -48,7 +48,7 @@ async def lifespan(app: FastAPI):
 app=FastAPI(lifespan=lifespan)
     
 
-
+#creating the static files and media files to be served by the application. The static files are served from the "static" directory, and the media files are served from the "media" directory.
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.mount("/media", StaticFiles(directory="media"), name="media")
 
