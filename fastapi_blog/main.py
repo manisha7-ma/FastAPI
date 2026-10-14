@@ -45,6 +45,7 @@ async def lifespan(app: FastAPI):
     #Shutdown 
     await engine.dispose()
  
+#lifespan event handler is passed to the FastAPI application instance, which will call it when the application starts up and shuts down. 
 app=FastAPI(lifespan=lifespan)
     
 
