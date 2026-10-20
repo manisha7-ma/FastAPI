@@ -240,6 +240,80 @@
     // Initialize
     setTheme(localStorage.getItem('theme') || 'auto');
   </script>
+
+  ## Create Post JavaScript
+<!-- Create Post Form Handler -->
+<script type="module">
+    import {
+    getErrorMessage,
+    hideModal,
+    showModal,
+    } from "/static/js/utils.js";
+
+    const createForm = document.getElementById("createPostForm");
+
+    createForm.addEventListener("submit", async (event) => {
+    // Stop default form submission - we'll handle it with JavaScript
+    event.preventDefault();
+
+    // Gather form values into a plain object {title: "...", content: "..."}
+    const formData = new FormData(createForm);
+    const postData = Object.fromEntries(formData.entries());
+
+    // TEMPORARY - hardcoded until authorization (Tutorial 11)
+    postData.user_id = 1;
+
+    try {
+        // POST to our API as JSON
+        const response = await fetch("/api/posts", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify(postData),
+        });
+
+        if (response.ok) {
+        const data = await response.json();
+        document.getElementById("successMessage").textContent =
+            `Post "${data.title}" created successfully!`;
+
+        hideModal("createPostModal");
+        showModal("successModal");
+
+        // Clear form
+        createForm.reset();
+
+        // Reload page after modal is hidden to show new post
+        document
+            .getElementById("successModal")
+            .addEventListener(
+            "hidden.bs.modal",
+            () => {
+                window.location.reload();
+            },
+            { once: true },
+            );
+        } else {
+        const error = await response.json();
+        document.getElementById("errorMessage").textContent =
+            getErrorMessage(error);
+
+        hideModal("createPostModal");
+        showModal("errorModal");
+        }
+    } catch (error) {
+        document.getElementById("errorMessage").textContent =
+        "Network error. Please check your connection and try again.";
+        showModal("errorModal");
+    }
+    });
+</script>
+
+{% block scripts %}
+{% endblock scripts %}
+
+
 </body>
 
 </html>
