@@ -140,7 +140,7 @@ app.include_router(users.router,prefix="/api/users",tags=["Users"])
 @app.get("/", include_in_schema=False,name="home")
 async def home(request: Request, db: Annotated[AsyncSession, Depends(get_db)]):
     result = await db.execute(
-        select(models.Post).options(selectinload(models.Post.author))
+        select(models.Post).options(selectinload(models.Post.author)).order_by(models.Post.date_posted.desc())
     )
     posts = result.scalars().all()
     return templates.TemplateResponse(request, "home.html", {"posts": posts, "title": "Home Page"})
