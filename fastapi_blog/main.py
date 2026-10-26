@@ -151,7 +151,7 @@ async def home(request: Request, db: Annotated[AsyncSession, Depends(get_db)]):
 @app.get("/posts/{post_id}",include_in_schema=False)
 async def get_post_page(request:Request,post_id:int,db:Annotated[AsyncSession, Depends(get_db)]):
     result = await db.execute(
-        select(models.Post).where(models.Post.id == post_id).options(selectinload(models.Post.author)).order_by(models.Post.date_created.desc())  
+        select(models.Post).where(models.Post.id == post_id).options(selectinload(models.Post.author)).order_by(models.Post.date_posted.desc())  
     )
     post = result.scalars().first()
     if not post:

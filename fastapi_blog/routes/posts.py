@@ -15,7 +15,7 @@ router = APIRouter()
 #Creating API endpoints to create and retrieve posts from the database.
 @router.get("/getposts",response_model=list[PostResponse],include_in_schema=True)
 async def get_posts(db: Annotated[AsyncSession, Depends(get_db)]):
-    result = await db.execute(select(models.Post).options(selectinload(models.Post.author))).order_by(models.Post.date_created.desc())    
+    result = await db.execute(select(models.Post).options(selectinload(models.Post.author))).order_by(models.Post.date_posted.desc())    
     postList = result.scalars().all()
     if not postList:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No posts found")
@@ -124,3 +124,5 @@ async def delete_post(post_id:int,db:Annotated[AsyncSession, Depends(get_db)]):
     await db.delete(post)
     await db.commit()
     return {"detail": "Post deleted successfully"}    
+
+
